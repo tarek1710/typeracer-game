@@ -31,9 +31,7 @@ export function ProgressDashboard({ progress, onReset, onBack }: { progress: Pro
         <Card label="Best WPM" value={progress.bestWpm.toFixed(1)} />
         <Card label="Average WPM" value={avg.toFixed(1)} />
         <Card label="Best accuracy" value={`${progress.bestAccuracy.toFixed(1)}%`} />
-        <Card label="Calibrated skill" value={progress.skillWpm ? `${progress.skillWpm} WPM` : '—'} sub="rivals are scaled to this" />
         <Card label="Personal best" value={pb ? `${pb.wpm.toFixed(1)} WPM` : '—'} sub={pb ? `${pb.accuracy.toFixed(0)}% · ${MODES[pb.mode as GameMode]?.label ?? pb.mode} · ${new Date(pb.t).toLocaleDateString()}` : undefined} />
-        <Card label="Adaptive offset" value={`${progress.adaptiveOffset >= 0 ? '+' : ''}${(progress.adaptiveOffset * 100).toFixed(0)}%`} sub="only used if Adaptive is on" />
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <LineChart title="WPM — last 30 races" data={last.map((r) => r.wpm)} unit="" color="#22d3ee" />

@@ -15,14 +15,14 @@ export function accuracyMultiplier(accuracy01: number, strict = false): number {
 
 /**
  * EffectiveSpeed = Base + Bonus * AccuracyMultiplier
- * Bonus = (Ref - Base) * clamp(wpm / skill, 0, maxRatio)
- * The WPM is normalised by the calibrated skill, so a beginner at 15 WPM and a
- * pro at 90 WPM both reach `refSpeed` when typing at their own level.
+ * Bonus = (Ref - Base) * clamp(wpm / refWpm, 0, maxRatio)
+ * One absolute scale for every car: 40 WPM is the same speed for you and for a 40 WPM rival.
+ * Base is 0, so a car that is not being driven comes to a stop.
  */
 export function targetSpeed(
-  wpm: number, skillWpm: number, accuracy01: number, strict = false, p: PhysicsParams = PHYSICS,
+  wpm: number, accuracy01: number, strict = false, p: PhysicsParams = PHYSICS,
 ): number {
-  const ratio = clamp(wpm / Math.max(skillWpm, 1), 0, p.maxRatio);
+  const ratio = clamp(wpm / p.refWpm, 0, p.maxRatio);
   const bonus = (p.refSpeed - p.baseSpeed) * ratio;
   return p.baseSpeed + bonus * accuracyMultiplier(accuracy01, strict);
 }
@@ -34,7 +34,8 @@ export function stepSpeed(v: number, target: number, dt: number, p: PhysicsParam
   const diff = target - v;
   const limit = diff > 0 ? p.accel : p.decel;
   const dv = clamp(diff * p.response, -limit, limit) * dt;
-  return Math.abs(dv) >= Math.abs(diff) ? target : v + dv;
+  const nv = Math.abs(dv) >= Math.abs(diff) ? target : v + dv;
+  return target <= 0 && nv < 0.4 ? 0 : nv; // really stop instead of creeping
 }
 
 /** Distance = previous distance + speed * dt. Positions are only ever changed here. */

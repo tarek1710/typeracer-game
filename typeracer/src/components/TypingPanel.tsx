@@ -41,17 +41,16 @@ export const TypingPanel = memo(function TypingPanel({ engine, phase, lang, soun
   };
 
   const t = engine.typing;
-  const m = engine.metrics();
-  const lock = () => { const el = input.current; if (el) el.setSelectionRange(el.value.length, el.value.length); };
+    const lock = () => { const el = input.current; if (el) el.setSelectionRange(el.value.length, el.value.length); };
 
   return (
     <section className="neon-card rounded-2xl bg-ink-900/90 p-4 sm:p-5" onClick={() => input.current?.focus()}>
       <div className="mb-3 flex items-center justify-between gap-3 text-xs text-slate-400">
         <span className="flex items-center gap-1.5"><KeyboardIcon size={14} /> Type the text below</span>
-        <span>{t.remaining} chars left · {m.correctChars} correct</span>
+        <span>{t.remaining} chars left</span>
       </div>
-      <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuenow={Math.round(m.passageProgress)} aria-valuemin={0} aria-valuemax={100}>
-        <div className="h-full rounded-full bg-cyan-400 transition-[width] duration-100" style={{ width: `${m.passageProgress}%` }} />
+      <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuenow={Math.round(t.passagePercent)} aria-valuemin={0} aria-valuemax={100}>
+        <div className="h-full rounded-full bg-cyan-400 transition-[width] duration-100" style={{ width: `${t.passagePercent}%` }} />
       </div>
       <div className={`rounded-xl bg-black/30 p-3 sm:p-4 ${active ? '' : 'opacity-60'}`}>
         <PassageText chars={t.targetChars} states={t.charStates()} lang={lang} />

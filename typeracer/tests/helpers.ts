@@ -2,12 +2,10 @@ import { createRace } from '../src/game/createRace';
 import { mulberry32 } from '../src/game/rng';
 import { maxSpeed } from '../src/game/RacingPhysics';
 import type { RaceEngine } from '../src/game/RaceStateManager';
-import type { Difficulty, GameMode, RaceConfig } from '../src/game/types';
+import type { Category, GameMode, RaceConfig } from '../src/game/types';
 
-export function makeRace(skill: number, o: Partial<RaceConfig> & { difficulty?: Difficulty; mode?: GameMode } = {}) {
-  const cfg: RaceConfig = {
-    mode: 'classic', category: 'intermediate', difficulty: 'normal', skillWpm: skill, seed: 1234, catchUp: false, ...o,
-  };
+export function makeRace(o: Partial<RaceConfig> & { category?: Category; mode?: GameMode } = {}) {
+  const cfg: RaceConfig = { mode: 'classic', category: 'intermediate', difficulty: 'normal', seed: 1234, ...o };
   return createRace(cfg, { persistRecent: false });
 }
 

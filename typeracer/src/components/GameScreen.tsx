@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RaceTrack, type RaceTrackHandle } from './RaceTrack';
 import { TypingPanel } from './TypingPanel';
-
 import { ResultsDashboard } from './ResultsDashboard';
 import { PauseIcon, PlayIcon, RestartIcon, FlagIcon } from './icons';
 import { createRace } from '../game/createRace';
@@ -77,15 +76,14 @@ export function GameScreen({ config, sound, onHome, onProgress, onResult }: Prop
   }, [engine]);
 
   const restart = useCallback(() => setRaceId((n) => n + 1), []);
-  const solo = !engine.modeCfg.opponents;
-  
+  const timed = engine.modeCfg.end === 'time';
   const phase = snap.phase;
   const go = phase === 'racing' && snap.time < 0.9;
   const lang = config.category === 'bangla' ? 'bn' : undefined;
 
   return (
-    <main className="mx-auto flex h-dvh w-full max-w-7xl flex-col gap-2 overflow-hidden px-3 py-2">
-      <div className="relative">
+    <main className="flex w-full flex-col gap-2 px-2 pb-2 pt-2 sm:px-3" style={{ height: 'calc(100dvh - 3.25rem)', minHeight: 560 }}>
+      <div className="relative min-h-[220px] flex-1">
         <RaceTrack ref={track} engine={engine} />
         {(phase === 'countdown' || go) && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-live="assertive">
@@ -115,23 +113,11 @@ export function GameScreen({ config, sound, onHome, onProgress, onResult }: Prop
         {engine.modeCfg.end === 'manual' && (
           <button onClick={() => engine.finishNow()} disabled={phase !== 'racing' && phase !== 'paused'} className="flex items-center gap-2 rounded-lg bg-emerald-500/20 px-3 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-40"><FlagIcon size={16} /> End practice</button>
         )}
+        {timed && <span className="font-display text-lg font-bold tabular-nums text-amber-300" aria-label="Time left">{Math.ceil(snap.timeLeft ?? 0)}s</span>}
         <span className="ml-auto text-xs text-slate-500">Esc = pause</span>
       </div>
 
-      {!solo && (
-        <ol className="grid grid-cols-2 gap-1.5 sm:grid-cols-5" aria-label="Live standings">
-          {snap.ranking.map((c) => (
-            <li key={c.id} className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs ${c.isPlayer ? 'bg-cyan-400/10 ring-1 ring-cyan-400/40' : 'bg-white/5'}`}>
-              <span className="w-4 font-display font-bold text-slate-300">{c.rank}</span>
-              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: c.color }} />
-              <span className="min-w-0 flex-1 truncate">{c.isPlayer ? 'You' : c.name}</span>
-              <span className="tabular-nums text-slate-400">{c.wpm.toFixed(0)}</span>
-            </li>
-          ))}
-        </ol>
-      )}
 
-      
       <TypingPanel engine={engine} phase={phase} lang={lang} sound={sound} />
 
       {phase === 'finished' && snap.result && (

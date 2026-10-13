@@ -1,4 +1,4 @@
-import { CATCH_UP, MODES, PHYSICS, RACE, TYPING } from './config';
+import { CATCH_UP, CATEGORY_TIER, MODES, RACE, RIVAL_WPM, TYPING } from './config';
 import { accuracyPercent, RollingAccuracy } from './AccuracyCalculator';
 import { AIOpponent } from './AIOpponent';
 import { assignLanes, calibrateOpponents } from './AIDifficultyManager';
@@ -8,7 +8,7 @@ import { clamp, type Rng } from './rng';
 import { TypingEngine, type InputFlags, type InputResult } from './TypingEngine';
 import { RecentWpmTracker, wpmFromChars } from './WPMCalculator';
 import type {
-  CarState, ModeConfig, PerformanceMetrics, RaceConfig, RacePhase, RaceResult, Standing,
+  CarKind, CarState, ModeConfig, PerformanceMetrics, RaceConfig, RacePhase, RaceResult, Standing,
 } from './types';
 
 export interface RaceEvents {
@@ -61,6 +61,7 @@ export class RaceEngine {
   recentWpm = 0;
   peakWpm = 0;
   firstKeyTime: number | null = null;
+  lastKeyTime = -Infinity;
   winnerId: string | null = null;
   result: RaceResult | null = null;
   overtakeEvents: OvertakeEvent[] = [];
@@ -74,26 +75,30 @@ export class RaceEngine {
   constructor(readonly config: RaceConfig, private nextPassage: () => string, rng: Rng) {
     this.modeCfg = MODES[config.mode];
     const duration = config.mode === 'timetrial' ? config.timeLimit ?? 60 : this.modeCfg.duration;
-    this.trackLength = PHYSICS.refSpeed * duration;
+    // Track length: a typist at the average rival pace of this level takes `duration` seconds.
+    const tier = RIVAL_WPM[CATEGORY_TIER[config.category]];
+    const avgRival = tier.reduce((a, b) => a + b, 0) / tier.length;
+    const speedAt = (w: number) => targetSpeed(w, 1);
+    this.trackLength = this.modeCfg.end === 'distance' ? speedAt(avgRival) * duration
+      : this.modeCfg.end === 'time' ? speedAt(115) * duration
+        : speedAt(100) * 600;
 
-    const profiles = this.modeCfg.opponents
-      ? calibrateOpponents(config.skillWpm, config.difficulty, rng, config.adaptiveOffset ?? 0)
-      : [];
+    const profiles = this.modeCfg.opponents ? calibrateOpponents(config.category, rng) : [];
     const lanes = assignLanes(profiles.length, rng);
     const total = profiles.length + 1;
     const playerLane = Math.floor(total / 2);
     const freeLanes = Array.from({ length: total }, (_, i) => i).filter((i) => i !== playerLane);
 
-    const blank = (id: string, name: string, color: string, isPlayer: boolean, lane: number): CarState => ({
-      id, name, color, isPlayer, lane, distance: 0, speed: 0, targetSpeed: 0, currentWpm: 0,
+    const blank = (id: string, name: string, color: string, isPlayer: boolean, lane: number, kind: CarKind, tag = ''): CarState => ({
+      id, name, color, isPlayer, kind, tag, lane, distance: 0, speed: 0, targetSpeed: 0, currentWpm: 0,
       finished: false, finishTime: null, finishRank: null,
     });
-    this.player = blank('player', 'You', PLAYER_COLOR, true, playerLane);
+    this.player = blank('player', 'You', PLAYER_COLOR, true, playerLane, 'player');
     this.cars.push(this.player);
     profiles.forEach((pr, i) => {
-      const car = blank(pr.id, pr.name, pr.color, false, freeLanes[lanes[i]]);
+      const car = blank(pr.id, pr.name, pr.color, false, freeLanes[lanes[i]], pr.kind, `${pr.targetWpm} WPM`);
       this.cars.push(car);
-      this.opponents.push(new AIOpponent(pr, car, rng, config.skillWpm, this.modeCfg.strictAccuracy));
+      this.opponents.push(new AIOpponent(pr, car, rng, this.modeCfg.strictAccuracy));
     });
     this.typing = new TypingEngine(nextPassage());
     this.overtaking = new OvertakingManager(this.cars);
@@ -156,10 +161,13 @@ export class RaceEngine {
     const p = this.player;
 
     // player: recent typing -> smoothed WPM -> target speed -> rate-limited speed -> distance
-    this.recentWpm = this.tracker.recentWpm(this.time);
+    // No correct key for a moment -> the typing bonus fades out, so an idle car comes to a stop.
+    const idleFade = clamp(1 - (this.time - this.lastKeyTime - TYPING.idleGrace) / TYPING.idleFade, 0, 1);
+    this.recentWpm = this.tracker.recentWpm(this.time) * idleFade;
     this.smoothedWpm += (this.recentWpm - this.smoothedWpm) * (1 - Math.exp(-h / TYPING.smoothTau));
+    if (this.recentWpm === 0 && this.smoothedWpm < 0.5) this.smoothedWpm = 0; // fully idle -> exactly 0
     p.currentWpm = this.smoothedWpm;
-    p.targetSpeed = targetSpeed(this.smoothedWpm, this.config.skillWpm, this.rolling.value(), this.modeCfg.strictAccuracy);
+    p.targetSpeed = targetSpeed(this.smoothedWpm, this.rolling.value(), this.modeCfg.strictAccuracy);
     const prev = new Map<string, number>([[p.id, p.distance]]);
     if (!p.finished) {
       p.speed = stepSpeed(p.speed, p.targetSpeed, h);
@@ -209,6 +217,7 @@ export class RaceEngine {
     const res = this.typing.applyInput(value, now, flags);
     if (res.accepted > 0 || res.backspaces > 0) {
       if (this.firstKeyTime === null && res.accepted > 0) this.firstKeyTime = this.time;
+      if (res.accepted > 0) this.lastKeyTime = this.time;
       for (const k of res.keystrokes) this.rolling.push(k);
       if (res.passageCompleted) {
         const next = this.nextPassage();
@@ -286,14 +295,14 @@ export class RaceEngine {
       mode: this.config.mode, category: this.config.category, difficulty: this.config.difficulty, reason,
       finalPosition: me.rank, totalCars: this.cars.length,
       winnerName: winner ? winner.name : this.cars.length > 1 ? standings[0].name : 'You',
-      playerWon: winner ? winner.isPlayer : this.cars.length === 1,
+      playerWon: winner ? winner.isPlayer : me.rank === 1,
       finalWpm: wpmFromChars(this.typing.progressChars, elapsed),
       averageWpm: this.wpmTime > 0 ? this.wpmIntegral / this.wpmTime : m.averageWpm,
       peakWpm: Math.max(this.peakWpm, 0), accuracy: m.accuracy, errors: m.errors,
       correctChars: m.correctChars, totalKeystrokes: m.totalKeystrokes, duration,
       overtakes: this.overtakeEvents.filter((e) => e.passerId === 'player').length,
       uniqueOvertaken: this.passed.size, distance: this.player.distance,
-      skillWpm: this.config.skillWpm, standings, timestamp: Date.now(),
+      standings, timestamp: Date.now(),
     };
     this.setPhase('finished');
     this.emit('end', this.result);

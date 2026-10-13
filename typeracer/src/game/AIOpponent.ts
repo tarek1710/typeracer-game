@@ -5,7 +5,7 @@ import type { CarState, PhysicsParams } from './types';
 import { clamp, gaussian, rand, type Rng } from './rng';
 
 /**
- * Drives one AI car. It produces a simulated WPM (target * personality noise) and then
+ * Drives one AI car. It produces a simulated WPM (fixed target + small noise) and then
  * uses exactly the same speed + distance functions as the player.
  */
 export class AIOpponent {
@@ -15,16 +15,9 @@ export class AIOpponent {
   private nextBurstAt: number;
   private phys: PhysicsParams;
 
-  constructor(
-    readonly profile: OpponentProfile, readonly car: CarState,
-    private rng: Rng, private skillWpm: number, private strict: boolean,
-  ) {
+  constructor(readonly profile: OpponentProfile, readonly car: CarState, private rng: Rng, private strict: boolean) {
     this.nextBurstAt = rand(rng, 3, 7);
-    this.phys = {
-      ...PHYSICS,
-      accel: PHYSICS.accel * profile.accelMul,
-      decel: PHYSICS.decel * profile.decelMul,
-    };
+    this.phys = { ...PHYSICS, accel: PHYSICS.accel * profile.accelMul, decel: PHYSICS.decel * profile.decelMul };
   }
 
   update(time: number, dt: number, catchUpMult = 1) {
@@ -41,15 +34,13 @@ export class AIOpponent {
     this.burst += (this.burstTarget - this.burst) * Math.min(1, dt / 1.2);
 
     const start = pr.startBoost * Math.exp(-time / 8);
-    // Same warm-up a human has (reaction time + the recent-WPM window filling up), so AI cars
-    // do not get a free head start over a player who has to begin typing.
-    const warm = 1 - Math.exp(-(time + 0.3) / 1.3);
-    const wpm = clamp(pr.targetWpm * (1 + this.ou + this.burst + start) * catchUpMult, pr.targetWpm * 0.35, pr.maxWpm) * warm;
-    const acc = clamp(pr.accuracy + this.ou * 0.3, 0.8, 1);
+    // Same warm-up a human has (reaction time + the recent-WPM window filling up).
+    const warm = 1 - Math.exp(-(time + 0.3) / 1.0);
+    const wpm = clamp(pr.targetWpm * (1 + this.ou + this.burst + start) * catchUpMult, pr.targetWpm * 0.5, pr.maxWpm) * warm;
 
     const c = this.car;
     c.currentWpm = wpm;
-    c.targetSpeed = targetSpeed(wpm, this.skillWpm, acc, this.strict, this.phys);
+    c.targetSpeed = targetSpeed(wpm, 1, this.strict, this.phys);
     c.speed = stepSpeed(c.speed, c.targetSpeed, dt, this.phys);
     c.distance = integrate(c.distance, c.speed, dt);
   }

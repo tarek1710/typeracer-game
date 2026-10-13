@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { DumbbellIcon, FileTextIcon, FlagIcon, GaugeIcon, PlayIcon, TargetIcon, TimerIcon, ZapIcon } from './icons';
 import { MODES } from '../game/config';
 import { cleanCustomText } from '../game/texts';
+import { rivalWpms } from '../game/AIDifficultyManager';
 import type { Progress } from '../game/storage';
 import type { Category, GameMode } from '../game/types';
 
@@ -22,21 +23,18 @@ const CATEGORIES: { id: Category; label: string; hint: string }[] = [
 ];
 const MODE_ORDER: GameMode[] = ['quick', 'classic', 'timetrial', 'accuracy', 'practice', 'custom'];
 
-export function MenuScreen({ options, onOptions, progress, onStart, onCalibrate, onProgress }: {
+export function MenuScreen({ options, onOptions, progress, onStart, onProgress }: {
   options: RaceOptions; onOptions: (o: RaceOptions) => void; progress: Progress;
-  onStart: () => void; onCalibrate: () => void; onProgress: () => void;
+  onStart: () => void; onProgress: () => void;
 }) {
   const [touched, setTouched] = useState(false);
+  const rivals = rivalWpms(options.category);
   const customLen = cleanCustomText(options.customText).length;
   const needsCustom = options.category === 'custom' || options.mode === 'custom';
   const customOk = !needsCustom || customLen >= 20;
   const set = (p: Partial<RaceOptions>) => onOptions({ ...options, ...p });
-  const pickMode = (mode: GameMode) =>
-  set({
-    mode,
-    category:
-      options.category === 'custom' ? 'intermediate' : options.category,
-  });
+  const pickMode = (mode: GameMode) => set(mode === 'custom' ? { mode, category: 'custom' } : { mode, category: options.category === 'custom' && mode !== 'custom' ? 'intermediate' : options.category });
+
   return (
     <main className="mx-auto w-full max-w-5xl px-3 pb-12 pt-6 sm:px-4">
       <section className="mb-6">
@@ -97,24 +95,26 @@ export function MenuScreen({ options, onOptions, progress, onStart, onCalibrate,
 
         <aside className="space-y-3" aria-label="Your level">
           <div className="neon-card rounded-2xl bg-ink-900/90 p-4">
-            <h2 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400"><GaugeIcon size={14} /> Your calibrated speed</h2>
-            {progress.skillWpm ? (
-              <p className="font-display text-3xl font-bold text-cyan-300">{progress.skillWpm} <span className="text-base text-slate-400">WPM</span></p>
+            <h2 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400"><GaugeIcon size={14} /> Your rivals</h2>
+            {MODES[options.mode].opponents ? (
+              <>
+                <p className="font-display text-2xl font-bold text-cyan-300">{rivals.join(' · ')} <span className="text-base text-slate-400">WPM</span></p>
+                <p className="mt-1 text-xs text-slate-400">Four rivals at fixed speeds for this level. Type faster than a rival to overtake it; stop typing and your car stops.</p>
+              </>
             ) : (
-              <p className="text-sm text-amber-300">Not calibrated yet — a 20-second test sets fair rival speeds.</p>
+              <p className="text-sm text-slate-300">No rivals in this mode. Type at your own pace; stop typing and your car stops.</p>
             )}
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button onClick={onCalibrate} className="rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold hover:bg-white/15">{progress.skillWpm ? 'Recalibrate' : 'Take calibration test'}</button>
+            <div className="mt-3">
               <button onClick={onProgress} className="rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold hover:bg-white/15">My progress</button>
             </div>
           </div>
           <div className="neon-card rounded-2xl bg-ink-900/90 p-4 text-sm text-slate-300">
             <p><b>{progress.totalRaces}</b> races · <b>{progress.wins}</b> wins · best <b>{progress.bestWpm.toFixed(0)}</b> WPM</p>
-            <p className="mt-2 text-xs text-slate-500">Tip: change difficulty in the top bar. Esc pauses during a race.</p>
+            <p className="mt-2 text-xs text-slate-500">Esc pauses during a race.</p>
           </div>
           <button onClick={() => { setTouched(true); if (customOk) onStart(); }} disabled={!customOk}
             className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-400 to-fuchsia-400 px-5 py-4 font-display text-lg font-bold text-slate-950 shadow-lg shadow-cyan-500/20 hover:brightness-110 disabled:opacity-40">
-            <PlayIcon /> {progress.skillWpm ? 'START RACE' : 'CALIBRATE & RACE'}
+            <PlayIcon /> START RACE
           </button>
         </aside>
       </div>

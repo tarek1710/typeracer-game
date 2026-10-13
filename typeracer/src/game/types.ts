@@ -8,11 +8,13 @@ export type Category =
   | 'programming'
   | 'bangla'
   | 'custom';
+export type CarKind = 'van' | 'hatch' | 'coupe' | 'racer' | 'player';
 export type RacePhase = 'idle' | 'countdown' | 'racing' | 'paused' | 'finished';
 
 export interface PhysicsParams {
   baseSpeed: number; // m/s a car has with zero typing bonus
-  refSpeed: number; // m/s when typing exactly at calibrated skill with perfect accuracy
+  refWpm: number; // WPM that produces refSpeed (absolute scale, same for every car)
+  refSpeed: number; // m/s at refWpm with perfect accuracy
   maxRatio: number; // cap on (wpm / skill)
   accel: number; // m/s^2 limit
   decel: number; // m/s^2 limit
@@ -37,6 +39,8 @@ export interface CarState {
   name: string;
   color: string;
   isPlayer: boolean;
+  kind: CarKind;
+  tag: string; // e.g. "40 WPM" for rivals
   lane: number;
   distance: number; // metres travelled, integrated from speed
   speed: number; // m/s
@@ -51,11 +55,9 @@ export interface RaceConfig {
   mode: GameMode;
   category: Category;
   difficulty: Difficulty;
-  skillWpm: number;
   customText?: string;
   timeLimit?: number;
   seed?: number;
-  adaptiveOffset?: number;
   catchUp?: boolean;
 }
 
@@ -102,7 +104,6 @@ export interface RaceResult {
   overtakes: number;
   uniqueOvertaken: number;
   distance: number;
-  skillWpm: number;
   standings: Standing[];
   timestamp: number;
 }
